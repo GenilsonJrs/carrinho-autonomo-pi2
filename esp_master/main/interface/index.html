@@ -1,40 +1,181 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Projeto PI2 BT — Mestre</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rota do Robô — ESP32-S3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h2>🤖 Projeto PI2 BT — Mestre</h2>
-    <div id="status">Fila: 0</div>
 
-    <div class="card">
-        <h3>Adicionar passo</h3>
-        <select id="tipo">
-            <option value="mover">Mover (cm)</option>
-            <option value="girar">Girar (graus)</option>
-        </select>
-        <input id="valor" type="number" value="100" min="0" max="16383">
-        <select id="direcao">
-            <option value="forward">Frente / Horário</option>
-            <option value="anticlockwise">Anti-horário</option>
-        </select>
-        <button onclick="addPasso()">Adicionar</button>
+<header class="main-header">
+  <div class="header-titles">
+    <h1>Rota do Robô</h1>
+    <p>Página de acompanhamento</p>
+  </div>
+  <div class="header-status">
+    <div class="status-indicator">
+      <div class="dot"></div>
+      <span>Controlador conectado</span>
     </div>
+    <div class="badge">COM3</div>
+    <div class="badge badge-success">Executando rota</div>
+  </div>
+</header>
 
-    <div class="card">
-        <h3>Rota</h3>
-        <ol id="lista"></ol>
-        <button class="primary" onclick="enviar('append')">Enviar (append)</button>
-        <button onclick="enviar('restart')">Enviar (restart)</button>
-        <button onclick="limpar()">Limpar lista</button>
+<button class="btn-emergency-global" onclick="paradaEmergenciaGlobal()" title="PARADA DE EMERGÊNCIA">STOP</button>
+
+<div class="container">
+  <main class="main-content">
+    
+    <!-- CONFIGURAÇÃO DE ENVIO -->
+    <section class="section-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 class="section-title" style="margin-bottom: 0;">Configuração de Envio</h2>
+        <div style="font-size: 11px; color: var(--text-muted); background: #f3f4f6; padding: 4px 10px; border-radius: 100px;">? Ajuda ativa</div>
+      </div>
+      <div class="builder-controls sched-grid">
+        <button class="btn-build active" id="mode-restart" onclick="definirConfigEnvio('restart')">
+          <span class="btn-title">Substituir</span>
+          <span class="btn-subtitle">Resetar memória</span>
+        </button>
+        <button class="btn-build" id="mode-append" onclick="definirConfigEnvio('append')">
+          <span class="btn-title">Adicionar</span>
+          <span class="btn-subtitle">Manter atual</span>
+        </button>
+        <button class="btn-build" id="mode-end_path" onclick="definirConfigEnvio('end_path')">
+          <span class="btn-title">Agendar Trecho</span>
+          <span class="btn-subtitle">Ao fim do grupo</span>
+        </button>
+        <button class="btn-build" id="mode-end_route" onclick="definirConfigEnvio('end_route')">
+          <span class="btn-title">Agendar Rota</span>
+          <span class="btn-subtitle">Ao fim da missão</span>
+        </button>
+      </div>
+      <div id="envio-help" class="help-box">
+        O robô apagará toda a memória e iniciará esta nova rota imediatamente.
+      </div>
+    </section>
+
+    <!-- CONSTRUTOR DA ROTA -->
+    <section class="section-card">
+      <h2 class="section-title">Construtor da rota</h2>
+      <div class="builder-controls grid-3">
+        <button class="btn-build" onclick="adicionarAcaoRapida('mover')">
+          <span class="btn-title">Movimento</span>
+          <span class="btn-subtitle">Ir para frente ou ré</span>
+        </button>
+        <button class="btn-build" onclick="adicionarAcaoRapida('girar')">
+          <span class="btn-title">Giro</span>
+          <span class="btn-subtitle">Virar o robô</span>
+        </button>
+        <button class="btn-build btn-danger-solid" onclick="resetarRota()">
+          <span class="btn-title">Limpar Rota</span>
+          <span class="btn-subtitle">Apagar tudo</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- LISTA DE ROTA (Onde os paths aparecem) -->
+    <section class="section-card route-builder-area">
+      <div id="listaPaths">
+        <!-- Injetado via JS -->
+      </div>
+      <div class="mt-auto" style="padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap;">
+         <input type="file" id="inputArquivo" style="display: none;" onchange="carregarJSON(event)">
+         <button class="btn-build" onclick="document.getElementById('inputArquivo').click()">Carregar JSON</button>
+         <button class="btn-build" onclick="baixarJSON()">Exportar JSON</button>
+         <button class="btn-build" style="background: var(--accent); color: white;" onclick="enviarRota()">Enviar Rota</button>
+      </div>
+    </section>
+
+  </main>
+
+  <aside class="sidebar">
+    <div class="side-panel">
+       <!-- Conteúdo lateral aqui (ex: Pilha, Preview JSON) -->
+       <div style="padding: 20px;">
+         <h3 class="section-title" style="font-size: 14px; margin-bottom: 12px;">Pilha de Execução</h3>
+         <div id="listaPilha"></div>
+       </div>
     </div>
+    <div class="side-panel">
+      <div style="padding: 20px;">
+         <h3 class="section-title" style="font-size: 14px; margin-bottom: 12px;">Prévia JSON</h3>
+         <pre id="previaJson" style="font-size: 10px; overflow: auto; max-height: 200px;"></pre>
+       </div>
+    </div>
+    <div class="side-panel">
+      <div style="padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 class="section-title" style="font-size: 14px; margin-bottom: 0;">Mapa de Percurso</h3>
+          <div class="badge badge-success" id="distanciaTotal" style="font-size: 10px; padding: 2px 8px;">Total: 0.0 m</div>
+        </div>
+        <div class="canvas-container mini-map">
+          <canvas id="canvasRota"></canvas>
+          <div class="canvas-controls">
+            <button class="btn-build btn-sm" onclick="centralizarCanvas()">Target</button>
+          </div>
+          <div class="canvas-hint">Arraste para mover o mapa</div>
+        </div>
+        <div class="sim-controls" id="simControls">
+          <button class="btn-simular" id="btnSimular" onclick="iniciarSimulacao()">&#9654; Simular rota</button>
+          <div class="sim-running" id="simRunning" style="display:none;">
+            <div class="sim-status" id="simStatus"></div>
+            <div class="sim-btns">
+              <button class="btn-sim-pill" id="btnPausar" onclick="pausarSimulacao()">&#10074;&#10074; Pausar</button>
+              <button class="btn-sim-pill" id="btnReiniciar" onclick="reiniciarSimulacao()">&#8635; Reiniciar</button>
+              <button class="btn-sim-pill btn-sim-speed" id="btnVelocidade" onclick="alternarVelocidade()">2&times;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="side-panel">
+      <div style="padding: 20px;">
+        <h3 class="section-title" style="font-size: 14px; margin-bottom: 12px;">Controle Manual</h3>
+        <div class="d-pad">
+          <button class="btn-ctrl" onmousedown="comandoManual('frente')" onmouseup="comandoManual('parar')" title="Frente">↑</button>
+          <div class="d-pad-mid">
+            <button class="btn-ctrl" onmousedown="comandoManual('esquerda')" onmouseup="comandoManual('parar')" title="Esquerda">←</button>
+            <button class="btn-ctrl btn-stop" onclick="comandoManual('parar')" title="Parar">■</button>
+            <button class="btn-ctrl" onmousedown="comandoManual('direita')" onmouseup="comandoManual('parar')" title="Direita">→</button>
+          </div>
+          <button class="btn-ctrl" onmousedown="comandoManual('re')" onmouseup="comandoManual('parar')" title="Ré">↓</button>
+        </div>
+      </div>
+    </div>
+    <div class="side-panel">
+      <div style="padding: 20px;">
+        <h3 class="section-title" style="font-size: 14px; margin-bottom: 12px;">Telemetria do Robô</h3>
+        <div class="telemetria-grid">
+          <div class="tel-item">
+            <span class="tel-label">Bateria</span>
+            <span class="tel-value" id="telBateria">--%</span>
+          </div>
+          <div class="tel-item">
+            <span class="tel-label">Yaw (Giro)</span>
+            <span class="tel-value" id="telYaw">0.0°</span>
+          </div>
+          <div class="tel-item">
+            <span class="tel-label">Encoder Esq.</span>
+            <span class="tel-value" id="telEncEsq">0</span>
+          </div>
+          <div class="tel-item">
+            <span class="tel-label">Encoder Dir.</span>
+            <span class="tel-value" id="telEncDir">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
 
-    <button class="stop" onclick="emergencia()">⏹️ EMERGÊNCIA</button>
-    <div id="msg"></div>
+<div id="notificacao"></div>
 
-    <script src="app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
