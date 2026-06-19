@@ -220,6 +220,7 @@ static void uart_link_init(void) {
     uart_driver_install(UART_LINK_PORT, 1024, 1024, 0, NULL, 0);
     uart_param_config(UART_LINK_PORT, &cfg);
     uart_set_pin(UART_LINK_PORT, UART_LINK_TX, UART_LINK_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    gpio_set_pull_mode(UART_LINK_RX, GPIO_PULLUP_ONLY);
     ESP_LOGI(TAG, "UART link TX%d/RX%d", UART_LINK_TX, UART_LINK_RX);
 }
 
@@ -236,31 +237,30 @@ static void task_uart_link(void *arg) {
     uint8_t idx = 0;
     uint8_t b;
     for (;;) {
-        while (uart_read_bytes(UART_LINK_PORT, &b, 1, 0) > 0) {
-            rx[idx++] = b;
-            if (idx == 3) {
-                if ((rx[0] ^ rx[1]) == rx[2]) {
-                    uint16_t val = ((uint16_t)rx[0] << 8) | rx[1];
-                    if (!uart_move_active && !g_queda) {
-                        int estado = (val >> 14) & 0x03;
-                        int valor  = val & 0x3FFF;
-                        float alvo = (estado == 3) ? (valor * PULSOS_POR_CM)
-                                                   : (valor * PULSOS_POR_GRAU);
-                        uart_move_estado = estado;
-                        uart_move_alvo   = alvo;
-                        uart_move_active = true;
-                        uart_send_pkt(SIG_ACK);
-                        ESP_LOGI(TAG, "UART CMD estado=%d valor=%d -> alvo=%.0f pulsos", estado, valor, alvo);
-                    }
-                    idx = 0;
-                } else {
-                    rx[0] = rx[1];
-                    rx[1] = rx[2];
-                    idx = 2;
+        int n = uart_read_bytes(UART_LINK_PORT, &b, 1, pdMS_TO_TICKS(20));
+        if (n <= 0) continue;
+        rx[idx++] = b;
+        if (idx == 3) {
+            if ((rx[0] ^ rx[1]) == rx[2]) {
+                uint16_t val = ((uint16_t)rx[0] << 8) | rx[1];
+                if (!uart_move_active && !g_queda) {
+                    int estado = (val >> 14) & 0x03;
+                    int valor  = val & 0x3FFF;
+                    float alvo = (estado == 3) ? (valor * PULSOS_POR_CM)
+                                               : (valor * PULSOS_POR_GRAU);
+                    uart_move_estado = estado;
+                    uart_move_alvo   = alvo;
+                    uart_move_active = true;
+                    uart_send_pkt(SIG_ACK);
+                    ESP_LOGI(TAG, "UART CMD estado=%d valor=%d -> alvo=%.0f pulsos", estado, valor, alvo);
                 }
+                idx = 0;
+            } else {
+                rx[0] = rx[1];
+                rx[1] = rx[2];
+                idx = 2;
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(5));
     }
 }
 
@@ -295,12 +295,6 @@ static void task_controle(void *arg) {
                 mv_prev = false;
                 uart_send_pkt(SIG_ABORT);
                 ESP_LOGW(TAG, "UART move abortado (queda) -> ABORT");
-            } else if (g_cmd == 'S') {
-                motores_stop();
-                uart_move_active = false;
-                mv_prev = false;
-                uart_send_pkt(SIG_ABORT);
-                ESP_LOGW(TAG, "UART move abortado (stop BLE) -> ABORT");
             } else {
                 mv_pulsos += (dL + dR) / 2.0f;
                 if (uart_move_estado == 3) {
