@@ -136,15 +136,20 @@
     </div>
     <div class="side-panel">
       <div style="padding: 20px;">
-        <h3 class="section-title" style="font-size: 14px; margin-bottom: 12px;">Controle Manual</h3>
+        <h3 class="section-title" style="font-size: 14px; margin-bottom: 12px;">Controle Manual (Bluetooth)</h3>
+        <button id="btnBt" class="btn-build" style="width:100%; margin-bottom:10px;" onclick="conectarBluetooth()">🔵 Conectar Bluetooth</button>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:12px; font-size:12px; color:var(--text-muted);">
+          <span>IP do mestre:</span>
+          <input id="ipMestre" value="192.168.1.102" style="flex:1; min-width:0; border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-family:inherit;">
+        </div>
         <div class="d-pad">
-          <button class="btn-ctrl" onmousedown="comandoManual('frente')" onmouseup="comandoManual('parar')" title="Frente">↑</button>
+          <button class="btn-ctrl" onmousedown="comandoManual('frente')" onmouseup="comandoManual('parar')" ontouchstart="comandoManual('frente')" ontouchend="comandoManual('parar')" title="Frente">↑</button>
           <div class="d-pad-mid">
-            <button class="btn-ctrl" onmousedown="comandoManual('esquerda')" onmouseup="comandoManual('parar')" title="Esquerda">←</button>
+            <button class="btn-ctrl" onmousedown="comandoManual('esquerda')" onmouseup="comandoManual('parar')" ontouchstart="comandoManual('esquerda')" ontouchend="comandoManual('parar')" title="Esquerda">←</button>
             <button class="btn-ctrl btn-stop" onclick="comandoManual('parar')" title="Parar">■</button>
-            <button class="btn-ctrl" onmousedown="comandoManual('direita')" onmouseup="comandoManual('parar')" title="Direita">→</button>
+            <button class="btn-ctrl" onmousedown="comandoManual('direita')" onmouseup="comandoManual('parar')" ontouchstart="comandoManual('direita')" ontouchend="comandoManual('parar')" title="Direita">→</button>
           </div>
-          <button class="btn-ctrl" onmousedown="comandoManual('re')" onmouseup="comandoManual('parar')" title="Ré">↓</button>
+          <button class="btn-ctrl" onmousedown="comandoManual('re')" onmouseup="comandoManual('parar')" ontouchstart="comandoManual('re')" ontouchend="comandoManual('parar')" title="Ré">↓</button>
         </div>
       </div>
     </div>

@@ -321,7 +321,7 @@ async function enviarRota() {
   const payload = { operacao: estado.operacao === 1 ? 'restart' : 'append', rota };
   notificar('Enviando rota para o controlador...', 'info');
   try {
-    const r = await fetch('/api/route', {
+    const r = await fetch(apiBase() + '/api/route', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -376,17 +376,56 @@ async function carregarJSON(event) {
 
 // --- Controle Manual e Telemetria (Mock) ---
 
-function comandoManual(direcao) {
-  console.log(`Comando manual enviado: ${direcao}`);
-  if (direcao !== 'parar') {
-    notificar(`Movendo: ${direcao}`, 'info');
+let caracteristica_bt = null;
+
+function apiBase() {
+  if (location.protocol !== 'file:') return '';
+  const el = document.getElementById('ipMestre');
+  const ip = (el && el.value.trim()) || '192.168.1.102';
+  return 'http://' + ip;
+}
+
+async function conectarBluetooth() {
+  if (!navigator.bluetooth) {
+    notificar('Web Bluetooth indisponivel aqui. Abra esta pagina como arquivo local (file://) no Chrome/Edge.', 'erro');
+    return;
   }
+  try {
+    const dispositivo = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'ROBO_BB8' }],
+      optionalServices: [0x00FF]
+    });
+    dispositivo.addEventListener('gattserverdisconnected', () => {
+      caracteristica_bt = null;
+      const b = document.getElementById('btnBt');
+      if (b) { b.textContent = '🔵 Conectar Bluetooth'; b.style.background = ''; b.style.color = ''; }
+      notificar('Bluetooth desconectado.', 'info');
+    });
+    const servidor = await dispositivo.gatt.connect();
+    const servico = await servidor.getPrimaryService(0x00FF);
+    caracteristica_bt = await servico.getCharacteristic(0xFF01);
+    const b = document.getElementById('btnBt');
+    if (b) { b.textContent = '🔵 Conectado'; b.style.background = 'var(--success)'; b.style.color = '#fff'; }
+    notificar('Bluetooth conectado a ROBO_BB8.', 'sucesso');
+  } catch (e) {
+    notificar('Falha no Bluetooth: ' + e.message, 'erro');
+  }
+}
+
+function comandoManual(direcao) {
+  const mapa = { frente: 'F', re: 'B', esquerda: 'L', direita: 'R', parar: 'S' };
+  const ch = mapa[direcao] || 'S';
+  if (!caracteristica_bt) {
+    if (direcao !== 'parar') notificar('Conecte o Bluetooth primeiro.', 'erro');
+    return;
+  }
+  caracteristica_bt.writeValue(new TextEncoder().encode(ch)).catch(e => console.log(e));
 }
 
 async function paradaEmergenciaGlobal() {
   notificar('PARADA DE EMERGÊNCIA ATIVADA!', 'erro');
   try {
-    await fetch('/api/emergency', { method: 'POST' });
+    await fetch(apiBase() + '/api/emergency', { method: 'POST' });
   } catch (e) {
     console.log(e);
   }

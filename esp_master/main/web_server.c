@@ -16,6 +16,18 @@ extern const uint8_t style_css_end[]     asm("_binary_style_css_end");
 
 static web_ctx_t *g_ctx = NULL;
 
+static void cors(httpd_req_t *req) {
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+}
+
+static esp_err_t h_options(httpd_req_t *req) {
+    cors(req);
+    httpd_resp_set_status(req, "204 No Content");
+    return httpd_resp_send(req, NULL, 0);
+}
+
 static esp_err_t serve(httpd_req_t *req, const char *type, const uint8_t *a, const uint8_t *b) {
     httpd_resp_set_type(req, type);
     return httpd_resp_send(req, (const char *)a, b - a);
@@ -26,6 +38,7 @@ static esp_err_t h_appjs(httpd_req_t *req) { return serve(req, "application/java
 static esp_err_t h_css(httpd_req_t *req)   { return serve(req, "text/css", style_css_start, style_css_end); }
 
 static esp_err_t h_status(httpd_req_t *req) {
+    cors(req);
     char out[64];
     snprintf(out, sizeof(out), "{\"fila\":%u}", (unsigned)fila_tam(g_ctx->fila));
     httpd_resp_set_type(req, "application/json");
@@ -33,6 +46,7 @@ static esp_err_t h_status(httpd_req_t *req) {
 }
 
 static esp_err_t h_route(httpd_req_t *req) {
+    cors(req);
     int total = req->content_len;
     if (total <= 0 || total > 8192) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "tamanho invalido");
@@ -77,7 +91,8 @@ static esp_err_t h_route(httpd_req_t *req) {
                 const char *dir = (jd && cJSON_IsString(jd)) ? jd->valuestring : "clockwise";
                 estado = (strcmp(dir, "anticlockwise") == 0 || strcmp(dir, "esquerda") == 0) ? 1 : 0;
             } else {
-                estado = 3;
+                const char *dir = (jd && cJSON_IsString(jd)) ? jd->valuestring : "forward";
+                estado = (strcmp(dir, "backward") == 0 || strcmp(dir, "re") == 0) ? 2 : 3;
             }
             uint16_t cmd = ((uint16_t)(estado & 0x03) << 14) | (uint16_t)(valor & 0x3FFF);
             if (fila_push(g_ctx->fila, cmd)) enf++;
@@ -93,6 +108,7 @@ static esp_err_t h_route(httpd_req_t *req) {
 }
 
 static esp_err_t h_emergency(httpd_req_t *req) {
+    cors(req);
     fila_limpa(g_ctx->fila);
     *g_ctx->emergencia = true;
     ESP_LOGW(TAG, "EMERGENCIA: fila limpa");
@@ -119,6 +135,8 @@ bool web_server_start(web_ctx_t *ctx) {
         { .uri = "/api/status",    .method = HTTP_GET,  .handler = h_status },
         { .uri = "/api/route",     .method = HTTP_POST, .handler = h_route },
         { .uri = "/api/emergency", .method = HTTP_POST, .handler = h_emergency },
+        { .uri = "/api/route",     .method = HTTP_OPTIONS, .handler = h_options },
+        { .uri = "/api/emergency", .method = HTTP_OPTIONS, .handler = h_options },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(server, &routes[i]);

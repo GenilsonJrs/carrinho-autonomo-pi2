@@ -246,8 +246,8 @@ static void task_uart_link(void *arg) {
                 if (!uart_move_active && !g_queda) {
                     int estado = (val >> 14) & 0x03;
                     int valor  = val & 0x3FFF;
-                    float alvo = (estado == 3) ? (valor * PULSOS_POR_CM)
-                                               : (valor * PULSOS_POR_GRAU);
+                    float alvo = (estado == 3 || estado == 2) ? (valor * PULSOS_POR_CM)
+                                                              : (valor * PULSOS_POR_GRAU);
                     uart_move_estado = estado;
                     uart_move_alvo   = alvo;
                     uart_move_active = true;
@@ -297,10 +297,11 @@ static void task_controle(void *arg) {
                 ESP_LOGW(TAG, "UART move abortado (queda) -> ABORT");
             } else {
                 mv_pulsos += (dL + dR) / 2.0f;
-                if (uart_move_estado == 3) {
+                if (uart_move_estado == 3 || uart_move_estado == 2) {
                     int magL, magR;
                     controle_reta(dL, dR, &mv_rumo, &mv_integ, &magL, &magR);
-                    aplicarPWM(magL, magR);
+                    if (uart_move_estado == 3) aplicarPWM(magL, magR);
+                    else                       aplicarPWM(-magL, -magR);
                 } else if (uart_move_estado == 0) {
                     aplicarPWM(-VEL_GIRO, VEL_GIRO);
                 } else {
