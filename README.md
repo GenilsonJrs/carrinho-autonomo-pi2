@@ -22,8 +22,7 @@ drivers BTS7960, sensores infravermelhos e encoders. A arquitetura prevê duas E
 ├── esp_slave/        Firmware da ESP32-S3 escrava (motores + sensores + encoders + controle)
 ├── esp_master/       Firmware da ESP32-S3 mestre (a implementar)
 ├── web/              Interface de controle via Web Bluetooth (controle_ble.html)
-├── docs/             Esquemático de ligações dos pinos (ligacoes.md)
-└── .ia/              Contexto do projeto, diário de progresso e roadmap
+└── docs/             Esquemático de ligações dos pinos (ligacoes.md)
 ```
 
 ## esp_slave — estado atual
@@ -67,5 +66,7 @@ Abrir `web/controle_ble.html` no **Chrome ou Edge** (Web Bluetooth), clicar em
 
 ## Próximos passos
 
-Ver [`.ia/roadmap.md`](.ia/roadmap.md): giroscópio (IMU), comunicação UART mestre↔escravo,
-firmware da ESP mestre (web + rotas) e máquinas de estado da missão.
+- Giroscópio (IMU MPU-6050) para melhorar o rumo e as curvas.
+- Comunicação UART entre a ESP escrava e a mestre.
+- Firmware da ESP mestre (Wi-Fi/web + recepção de rotas).
+- Máquinas de estado da missão.
