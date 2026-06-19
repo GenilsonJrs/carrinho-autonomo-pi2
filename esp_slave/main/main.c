@@ -7,6 +7,7 @@
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "driver/pulse_cnt.h"
+#include "driver/uart.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
@@ -38,6 +39,8 @@ static const char *TAG = "BB8";
 
 #define ROTA_PULSOS_RETA  7400
 #define ROTA_PULSOS_GIRO  435
+#define PULSOS_POR_CM     (ROTA_PULSOS_RETA / 100.0f)
+#define PULSOS_POR_GRAU   (ROTA_PULSOS_GIRO / 45.0f)
 
 #define LEDC_FREQ_HZ 20000
 #define LEDC_RES     LEDC_TIMER_8_BIT
@@ -53,10 +56,23 @@ static const char *TAG = "BB8";
 #define ENC_ESQ_PIN  GPIO_NUM_10
 #define ENC_DIR_PIN  GPIO_NUM_9
 
+#define UART_LINK_PORT  UART_NUM_1
+#define UART_LINK_TX    17
+#define UART_LINK_RX    16
+#define UART_LINK_BAUD  115200
+#define SIG_ACK    0xFFFF
+#define SIG_DONE   0xFFFE
+#define SIG_ABORT  0xFFFD
+
 static pcnt_unit_handle_t pcnt_esq = NULL;
 static pcnt_unit_handle_t pcnt_dir = NULL;
 static volatile bool g_queda = false;
 static volatile char g_cmd   = 'S';
+
+static volatile bool  uart_move_active = false;
+static volatile int   uart_move_estado = 3;
+static volatile float uart_move_alvo   = 0.0f;
+
 static uint8_t own_addr_type;
 static void start_advertising(void);
 
@@ -115,7 +131,7 @@ static void init_motores(void) {
 
 static void handle_command(char cmd) {
     g_cmd = cmd;
-    ESP_LOGI(TAG, "CMD %c", cmd);
+    ESP_LOGI(TAG, "BLE CMD %c", cmd);
 }
 
 static void init_sensores(void) {
@@ -192,6 +208,62 @@ static void controle_reta(int dL, int dR, float *rumo, float *integ, int *magL, 
     *magR = R;
 }
 
+static void uart_link_init(void) {
+    uart_config_t cfg = {
+        .baud_rate  = UART_LINK_BAUD,
+        .data_bits  = UART_DATA_8_BITS,
+        .parity     = UART_PARITY_DISABLE,
+        .stop_bits  = UART_STOP_BITS_1,
+        .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    uart_driver_install(UART_LINK_PORT, 1024, 1024, 0, NULL, 0);
+    uart_param_config(UART_LINK_PORT, &cfg);
+    uart_set_pin(UART_LINK_PORT, UART_LINK_TX, UART_LINK_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    ESP_LOGI(TAG, "UART link TX%d/RX%d", UART_LINK_TX, UART_LINK_RX);
+}
+
+static void uart_send_pkt(uint16_t val) {
+    uint8_t d[3];
+    d[0] = (uint8_t)(val >> 8);
+    d[1] = (uint8_t)(val & 0xFF);
+    d[2] = d[0] ^ d[1];
+    uart_write_bytes(UART_LINK_PORT, (const char *)d, 3);
+}
+
+static void task_uart_link(void *arg) {
+    uint8_t rx[3];
+    uint8_t idx = 0;
+    uint8_t b;
+    for (;;) {
+        while (uart_read_bytes(UART_LINK_PORT, &b, 1, 0) > 0) {
+            rx[idx++] = b;
+            if (idx == 3) {
+                if ((rx[0] ^ rx[1]) == rx[2]) {
+                    uint16_t val = ((uint16_t)rx[0] << 8) | rx[1];
+                    if (!uart_move_active && !g_queda) {
+                        int estado = (val >> 14) & 0x03;
+                        int valor  = val & 0x3FFF;
+                        float alvo = (estado == 3) ? (valor * PULSOS_POR_CM)
+                                                   : (valor * PULSOS_POR_GRAU);
+                        uart_move_estado = estado;
+                        uart_move_alvo   = alvo;
+                        uart_move_active = true;
+                        uart_send_pkt(SIG_ACK);
+                        ESP_LOGI(TAG, "UART CMD estado=%d valor=%d -> alvo=%.0f pulsos", estado, valor, alvo);
+                    }
+                    idx = 0;
+                } else {
+                    rx[0] = rx[1];
+                    rx[1] = rx[2];
+                    idx = 2;
+                }
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+}
+
 static void task_controle(void *arg) {
     long  total_esq = 0, total_dir = 0;
     float rumo = 0.0f, integ = 0.0f;
@@ -200,12 +272,58 @@ static void task_controle(void *arg) {
     float rota_pulsos = 0.0f;
     int   tick = 0;
 
+    bool  mv_prev = false;
+    float mv_pulsos = 0.0f;
+    float mv_rumo = 0.0f, mv_integ = 0.0f;
+
     for (;;) {
         int dL = 0, dR = 0;
         if (pcnt_esq) { pcnt_unit_get_count(pcnt_esq, &dL); pcnt_unit_clear_count(pcnt_esq); }
         if (pcnt_dir) { pcnt_unit_get_count(pcnt_dir, &dR); pcnt_unit_clear_count(pcnt_dir); }
         total_esq += dL;
         total_dir += dR;
+
+        if (uart_move_active) {
+            if (!mv_prev) {
+                mv_pulsos = 0.0f; mv_rumo = 0.0f; mv_integ = 0.0f;
+                mv_prev = true;
+            }
+
+            if (g_queda) {
+                motores_stop();
+                uart_move_active = false;
+                mv_prev = false;
+                uart_send_pkt(SIG_ABORT);
+                ESP_LOGW(TAG, "UART move abortado (queda) -> ABORT");
+            } else if (g_cmd == 'S') {
+                motores_stop();
+                uart_move_active = false;
+                mv_prev = false;
+                uart_send_pkt(SIG_ABORT);
+                ESP_LOGW(TAG, "UART move abortado (stop BLE) -> ABORT");
+            } else {
+                mv_pulsos += (dL + dR) / 2.0f;
+                if (uart_move_estado == 3) {
+                    int magL, magR;
+                    controle_reta(dL, dR, &mv_rumo, &mv_integ, &magL, &magR);
+                    aplicarPWM(magL, magR);
+                } else if (uart_move_estado == 0) {
+                    aplicarPWM(-VEL_GIRO, VEL_GIRO);
+                } else {
+                    aplicarPWM(VEL_GIRO, -VEL_GIRO);
+                }
+                if (mv_pulsos >= uart_move_alvo) {
+                    motores_stop();
+                    uart_move_active = false;
+                    mv_prev = false;
+                    uart_send_pkt(SIG_DONE);
+                    ESP_LOGI(TAG, "UART move concluido -> DONE");
+                }
+            }
+            vTaskDelay(pdMS_TO_TICKS(CTRL_MS));
+            continue;
+        }
+        mv_prev = false;
 
         char c = g_cmd;
         if (g_queda && (c == 'F' || c == 'L' || c == 'R' || c == 'A')) c = 'S';
@@ -254,8 +372,7 @@ static void task_controle(void *arg) {
 
         if (++tick >= (500 / CTRL_MS)) {
             tick = 0;
-            ESP_LOGI(TAG, "dL=%d dR=%d totE=%ld totD=%ld modo=%c fase=%d",
-                     dL, dR, total_esq, total_dir, modo, rota_fase);
+            ESP_LOGI(TAG, "dL=%d dR=%d totE=%ld totD=%ld modo=%c", dL, dR, total_esq, total_dir, modo);
         }
         vTaskDelay(pdMS_TO_TICKS(CTRL_MS));
     }
@@ -300,7 +417,6 @@ static int gap_event(struct ble_gap_event *event, void *arg) {
         case BLE_GAP_EVENT_DISCONNECT:
             ESP_LOGW(TAG, "Desconectado");
             g_cmd = 'S';
-            motores_stop();
             start_advertising();
             break;
         case BLE_GAP_EVENT_ADV_COMPLETE:
@@ -354,7 +470,9 @@ void app_main(void) {
     init_motores();
     init_sensores();
     init_encoders();
+    uart_link_init();
     xTaskCreate(task_sensor_queda, "sensor_queda", 3072, NULL, 6, NULL);
+    xTaskCreate(task_uart_link,    "uart_link",    4096, NULL, 7, NULL);
     xTaskCreate(task_controle,     "controle",     4096, NULL, 5, NULL);
 
     ret = nimble_port_init();
@@ -373,5 +491,5 @@ void app_main(void) {
     ble_hs_cfg.reset_cb = on_reset;
 
     nimble_port_freertos_init(host_task);
-    ESP_LOGI(TAG, "BB8 slave iniciado. BLE 'ROBO_BB8'.");
+    ESP_LOGI(TAG, "BB8 slave iniciado. BLE 'ROBO_BB8' + UART link.");
 }

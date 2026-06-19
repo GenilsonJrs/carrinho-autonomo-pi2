@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto PI2 BT — Mestre</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h2>🤖 Projeto PI2 BT — Mestre</h2>
+    <div id="status">Fila: 0</div>
+
+    <div class="card">
+        <h3>Adicionar passo</h3>
+        <select id="tipo">
+            <option value="mover">Mover (cm)</option>
+            <option value="girar">Girar (graus)</option>
+        </select>
+        <input id="valor" type="number" value="100" min="0" max="16383">
+        <select id="direcao">
+            <option value="forward">Frente / Horário</option>
+            <option value="anticlockwise">Anti-horário</option>
+        </select>
+        <button onclick="addPasso()">Adicionar</button>
+    </div>
+
+    <div class="card">
+        <h3>Rota</h3>
+        <ol id="lista"></ol>
+        <button class="primary" onclick="enviar('append')">Enviar (append)</button>
+        <button onclick="enviar('restart')">Enviar (restart)</button>
+        <button onclick="limpar()">Limpar lista</button>
+    </div>
+
+    <button class="stop" onclick="emergencia()">⏹️ EMERGÊNCIA</button>
+    <div id="msg"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

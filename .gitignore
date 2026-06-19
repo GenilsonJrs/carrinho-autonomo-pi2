@@ -1,6 +1,9 @@
 # Notas internas de contexto (nao versionar)
 .ia/
 
+# Credenciais (use o secrets.h.example como modelo)
+secrets.h
+
 # Artefatos de build do ESP-IDF
 build/
 sdkconfig
