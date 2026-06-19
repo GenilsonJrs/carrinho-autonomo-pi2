@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto PI2 BT</title>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; background: #121212; color: white; padding-top: 30px; user-select: none; }
+        .grid { display: grid; grid-template-columns: repeat(3, 90px); gap: 10px; margin-top: 24px; }
+        button { padding: 22px; font-size: 26px; border: none; border-radius: 12px; background: #333; color: white; cursor: pointer; touch-action: manipulation; }
+        button:active, .ativo { background: #666; transform: scale(0.95); }
+        #btnConectar { padding: 15px 30px; font-size: 18px; background: #007BFF; width: 280px; transition: 0.3s; margin-bottom: 18px; }
+        .vazio { visibility: hidden; }
+        .stop { background: #D32F2F !important; }
+        .painel-auto { display: flex; gap: 15px; background: #1e1e1e; padding: 16px; border-radius: 15px; margin-bottom: 18px; border: 1px solid #444; }
+        .btn-auto { background: #9C27B0; font-size: 16px; padding: 14px; }
+        .btn-parar-auto { background: #D32F2F; font-size: 16px; padding: 14px; }
+        #status { font-size: 14px; color: #aaa; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h2>🤖 Projeto PI2 BT</h2>
+    <button id="btnConectar">Conectar Bluetooth</button>
+
+    <div class="painel-auto">
+        <button class="btn-auto" onclick="enviar('A')">🔁 Rota (loop)</button>
+        <button class="btn-parar-auto" onclick="enviar('S')">⏹️ Parar</button>
+    </div>
+
+    <div class="grid">
+        <div class="vazio"></div>
+        <button id="btn-F" onmousedown="enviar('F')" onmouseup="enviar('S')" ontouchstart="enviar('F')" ontouchend="enviar('S')">⬆️</button>
+        <div class="vazio"></div>
+
+        <button id="btn-L" onmousedown="enviar('L')" onmouseup="enviar('S')" ontouchstart="enviar('L')" ontouchend="enviar('S')">⬅️</button>
+        <button class="stop" onmousedown="enviar('S')" ontouchstart="enviar('S')">🛑</button>
+        <button id="btn-R" onmousedown="enviar('R')" onmouseup="enviar('S')" ontouchstart="enviar('R')" ontouchend="enviar('S')">➡️</button>
+
+        <div class="vazio"></div>
+        <button id="btn-B" onmousedown="enviar('B')" onmouseup="enviar('S')" ontouchstart="enviar('B')" ontouchend="enviar('S')">⬇️</button>
+        <div class="vazio"></div>
+    </div>
+
+    <div id="status">Desconectado</div>
+
+    <script>
+        let caracteristica_bt;
+
+        document.getElementById('btnConectar').addEventListener('click', async () => {
+            try {
+                const dispositivo = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'ROBO_BB8' }],
+                    optionalServices: [0x00FF]
+                });
+                dispositivo.addEventListener('gattserverdisconnected', () => {
+                    document.getElementById('status').innerText = 'Desconectado';
+                    caracteristica_bt = null;
+                });
+                const servidor = await dispositivo.gatt.connect();
+                const servico = await servidor.getPrimaryService(0x00FF);
+                caracteristica_bt = await servico.getCharacteristic(0xFF01);
+
+                const btn = document.getElementById('btnConectar');
+                btn.innerText = 'Conectado!';
+                btn.style.background = '#4CAF50';
+                document.getElementById('status').innerText = 'Conectado a ROBO_BB8';
+            } catch (erro) {
+                alert('Falha na conexão: ' + erro);
+            }
+        });
+
+        async function enviar(comando) {
+            if (!caracteristica_bt) return;
+            const codificador = new TextEncoder();
+            try {
+                await caracteristica_bt.writeValue(codificador.encode(comando));
+            } catch (err) {
+                console.log(err);
+            }
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (event.repeat) return;
+            const tecla = event.key.toLowerCase();
+            if (tecla === 'w' || tecla === 'arrowup')         { enviar('F'); document.getElementById('btn-F').classList.add('ativo'); }
+            else if (tecla === 'a' || tecla === 'arrowleft')  { enviar('L'); document.getElementById('btn-L').classList.add('ativo'); }
+            else if (tecla === 's' || tecla === 'arrowdown')  { enviar('B'); document.getElementById('btn-B').classList.add('ativo'); }
+            else if (tecla === 'd' || tecla === 'arrowright') { enviar('R'); document.getElementById('btn-R').classList.add('ativo'); }
+            else if (tecla === ' ') { enviar('S'); }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            const tecla = event.key.toLowerCase();
+            if (['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'].includes(tecla)) {
+                enviar('S');
+                ['btn-F', 'btn-L', 'btn-B', 'btn-R'].forEach(id => document.getElementById(id).classList.remove('ativo'));
+            }
+        });
+    </script>
+</body>
+</html>
