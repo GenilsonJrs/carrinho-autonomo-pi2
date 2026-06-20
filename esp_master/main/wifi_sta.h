@@ -3,6 +3,6 @@
 
 #include <stdbool.h>
 
-bool wifi_sta_init(const char *ssid, const char *password);
+bool wifi_ap_init(const char *ssid, const char *password);
 
 #endif
