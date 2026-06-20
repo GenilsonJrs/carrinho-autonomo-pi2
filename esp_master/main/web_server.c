@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "esp_http_server.h"
 #include "cJSON.h"
+#include "uart_link.h"
 
 static const char *TAG = "WEB";
 
@@ -109,9 +110,28 @@ static esp_err_t h_route(httpd_req_t *req) {
 
 static esp_err_t h_emergency(httpd_req_t *req) {
     cors(req);
+    uart_link_send(CMD_STOP);
     fila_limpa(g_ctx->fila);
     *g_ctx->emergencia = true;
-    ESP_LOGW(TAG, "EMERGENCIA: fila limpa");
+    ESP_LOGW(TAG, "EMERGENCIA: STOP enviado + fila limpa");
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"ok\":true}");
+}
+
+static esp_err_t h_manual(httpd_req_t *req) {
+    cors(req);
+    char buf[8] = {0};
+    int n = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    char c = (n > 0) ? buf[0] : 'S';
+    uint16_t frame;
+    switch (c) {
+        case 'F': frame = MAN_FRENTE; break;
+        case 'B': frame = MAN_RE;     break;
+        case 'L': frame = MAN_ESQ;    break;
+        case 'R': frame = MAN_DIR;    break;
+        default:  frame = CMD_STOP;   break;
+    }
+    uart_link_send(frame);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, "{\"ok\":true}");
 }
@@ -123,7 +143,7 @@ bool web_server_start(web_ctx_t *ctx) {
     httpd_handle_t server = NULL;
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 8192;
-    cfg.max_uri_handlers = 10;
+    cfg.max_uri_handlers = 14;
     cfg.lru_purge_enable = true;
     if (httpd_start(&server, &cfg) != ESP_OK) return false;
 
@@ -137,6 +157,8 @@ bool web_server_start(web_ctx_t *ctx) {
         { .uri = "/api/emergency", .method = HTTP_POST, .handler = h_emergency },
         { .uri = "/api/route",     .method = HTTP_OPTIONS, .handler = h_options },
         { .uri = "/api/emergency", .method = HTTP_OPTIONS, .handler = h_options },
+        { .uri = "/api/manual",    .method = HTTP_POST, .handler = h_manual },
+        { .uri = "/api/manual",    .method = HTTP_OPTIONS, .handler = h_options },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(server, &routes[i]);

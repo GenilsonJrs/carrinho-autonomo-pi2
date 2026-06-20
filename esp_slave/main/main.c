@@ -63,6 +63,11 @@ static const char *TAG = "BB8";
 #define SIG_ACK    0xFFFF
 #define SIG_DONE   0xFFFE
 #define SIG_ABORT  0xFFFD
+#define CMD_STOP   0xFFFC
+#define MAN_FRENTE 0xFFF0
+#define MAN_RE     0xFFF1
+#define MAN_ESQ    0xFFF2
+#define MAN_DIR    0xFFF3
 
 static pcnt_unit_handle_t pcnt_esq = NULL;
 static pcnt_unit_handle_t pcnt_dir = NULL;
@@ -243,7 +248,16 @@ static void task_uart_link(void *arg) {
         if (idx == 3) {
             if ((rx[0] ^ rx[1]) == rx[2]) {
                 uint16_t val = ((uint16_t)rx[0] << 8) | rx[1];
-                if (!uart_move_active && !g_queda) {
+                if (val == CMD_STOP) {
+                    uart_move_active = false;
+                    g_cmd = 'S';
+                    motores_stop();
+                    ESP_LOGW(TAG, "STOP/emergencia -> parada imediata");
+                } else if (val == MAN_FRENTE) { if (!uart_move_active) g_cmd = 'F'; }
+                else if (val == MAN_RE)       { if (!uart_move_active) g_cmd = 'B'; }
+                else if (val == MAN_ESQ)      { if (!uart_move_active) g_cmd = 'L'; }
+                else if (val == MAN_DIR)      { if (!uart_move_active) g_cmd = 'R'; }
+                else if (!uart_move_active && !g_queda) {
                     int estado = (val >> 14) & 0x03;
                     int valor  = val & 0x3FFF;
                     float alvo = (estado == 3 || estado == 2) ? (valor * PULSOS_POR_CM)

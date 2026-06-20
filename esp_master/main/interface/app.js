@@ -415,11 +415,11 @@ async function conectarBluetooth() {
 function comandoManual(direcao) {
   const mapa = { frente: 'F', re: 'B', esquerda: 'L', direita: 'R', parar: 'S' };
   const ch = mapa[direcao] || 'S';
-  if (!caracteristica_bt) {
-    if (direcao !== 'parar') notificar('Conecte o Bluetooth primeiro.', 'erro');
-    return;
+  if (caracteristica_bt) {
+    caracteristica_bt.writeValue(new TextEncoder().encode(ch)).catch(e => console.log(e));
+  } else {
+    fetch(apiBase() + '/api/manual', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: ch }).catch(e => console.log(e));
   }
-  caracteristica_bt.writeValue(new TextEncoder().encode(ch)).catch(e => console.log(e));
 }
 
 async function paradaEmergenciaGlobal() {
