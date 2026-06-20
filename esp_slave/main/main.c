@@ -41,7 +41,7 @@ static const char *TAG = "BB8";
 
 #define ROTA_PULSOS_RETA  7400
 #define ROTA_PULSOS_GIRO  435
-#define ROTA_GRAUS_GIRO   45.0f
+#define ROTA_GRAUS_GIRO   180.0f
 #define PULSOS_POR_CM     (ROTA_PULSOS_RETA / 100.0f)
 #define PULSOS_POR_GRAU   (ROTA_PULSOS_GIRO / 45.0f)
 
@@ -446,7 +446,7 @@ static void task_controle(void *arg) {
                 aplicarPWM(-VEL_GIRO, VEL_GIRO);
                 float dyaw = fabsf(g_yaw - rota_yaw_ini);
                 bool por_gyro = g_yaw_ok && (dyaw >= ROTA_GRAUS_GIRO);
-                bool fallback = rota_pulsos >= ROTA_PULSOS_GIRO * 3.0f;
+                bool fallback = rota_pulsos >= ROTA_GRAUS_GIRO * PULSOS_POR_GRAU * 3.0f;
                 if (por_gyro || fallback) {
                     rota_fase = 0;
                     rota_pulsos = 0.0f;
