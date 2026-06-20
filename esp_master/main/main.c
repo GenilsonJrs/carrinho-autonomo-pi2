@@ -14,7 +14,7 @@ static const char *TAG = "MASTER";
 
 #define ACK_TIMEOUT_MS   300
 #define ACK_RETRIES      5
-#define DONE_TIMEOUT_MS  30000
+#define DONE_TIMEOUT_MS  180000
 
 #define AP_SSID "Carrinho_BB8"
 #define AP_PASS "bb812345"

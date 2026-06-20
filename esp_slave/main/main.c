@@ -34,15 +34,16 @@ static const char *TAG = "BB8";
 
 #define CTRL_MS    50
 #define VEL_MIN    90
-#define KP_RUMO    0.30f
-#define KI_RUMO    0.004f
-#define INTEG_MAX  8000.0f
+#define KP_YAW        6.0f
+#define KI_YAW        0.02f
+#define INTEG_MAX_YAW 200.0f
 #define CORR_MAX   70.0f
 
-#define ROTA_PULSOS_RETA  7400
+#define ROTA_PULSOS_RETA  6950
 #define ROTA_PULSOS_GIRO  435
 #define ROTA_GRAUS_GIRO   180.0f
-#define PULSOS_POR_CM     (ROTA_PULSOS_RETA / 100.0f)
+#define GIRO_OFFSET_GRAUS 4.5f
+#define PULSOS_POR_CM     69.5f
 #define PULSOS_POR_GRAU   (ROTA_PULSOS_GIRO / 45.0f)
 
 #define LEDC_FREQ_HZ 20000
@@ -271,14 +272,16 @@ static void task_giroscopio(void *arg) {
     }
 }
 
-static void controle_reta(int dL, int dR, float *rumo, float *integ, int *magL, int *magR) {
-    *rumo  += (float)(dL - dR);
-    *integ += *rumo;
-    if (*integ >  INTEG_MAX) *integ =  INTEG_MAX;
-    if (*integ < -INTEG_MAX) *integ = -INTEG_MAX;
-    float corr = KP_RUMO * (*rumo) + KI_RUMO * (*integ);
-    if (corr >  CORR_MAX) corr =  CORR_MAX;
-    if (corr < -CORR_MAX) corr = -CORR_MAX;
+static void controle_reta(float yaw_err, float *integ, int *magL, int *magR) {
+    float corr = 0.0f;
+    if (g_yaw_ok) {
+        *integ += yaw_err;
+        if (*integ >  INTEG_MAX_YAW) *integ =  INTEG_MAX_YAW;
+        if (*integ < -INTEG_MAX_YAW) *integ = -INTEG_MAX_YAW;
+        corr = KP_YAW * yaw_err + KI_YAW * (*integ);
+        if (corr >  CORR_MAX) corr =  CORR_MAX;
+        if (corr < -CORR_MAX) corr = -CORR_MAX;
+    }
     int L = (int)(VEL_RETA - corr);
     int R = (int)(VEL_RETA + corr);
     if (L < VEL_MIN) L = VEL_MIN;
@@ -354,7 +357,7 @@ static void task_uart_link(void *arg) {
 
 static void task_controle(void *arg) {
     long  total_esq = 0, total_dir = 0;
-    float rumo = 0.0f, integ = 0.0f;
+    float integ = 0.0f;
     char  modo_ant = 'S';
     int   rota_fase = 0;
     float rota_pulsos = 0.0f;
@@ -362,9 +365,11 @@ static void task_controle(void *arg) {
 
     bool  mv_prev = false;
     float mv_pulsos = 0.0f;
-    float mv_rumo = 0.0f, mv_integ = 0.0f;
+    float mv_integ = 0.0f;
     float mv_yaw_ini = 0.0f;
     float rota_yaw_ini = 0.0f;
+    float reta_yaw_alvo = 0.0f;
+    float rota_reta_yaw = 0.0f;
 
     for (;;) {
         int dL = 0, dR = 0;
@@ -375,7 +380,7 @@ static void task_controle(void *arg) {
 
         if (uart_move_active) {
             if (!mv_prev) {
-                mv_pulsos = 0.0f; mv_rumo = 0.0f; mv_integ = 0.0f;
+                mv_pulsos = 0.0f; mv_integ = 0.0f;
                 mv_yaw_ini = g_yaw;
                 mv_prev = true;
             }
@@ -391,7 +396,9 @@ static void task_controle(void *arg) {
                 bool concluiu = false;
                 if (uart_move_estado == 3 || uart_move_estado == 2) {
                     int magL, magR;
-                    controle_reta(dL, dR, &mv_rumo, &mv_integ, &magL, &magR);
+                    float err = (uart_move_estado == 3) ? (g_yaw - mv_yaw_ini)
+                                                        : -(g_yaw - mv_yaw_ini);
+                    controle_reta(err, &mv_integ, &magL, &magR);
                     if (uart_move_estado == 3) aplicarPWM(magL, magR);
                     else                       aplicarPWM(-magL, -magR);
                     concluiu = (mv_pulsos >= uart_move_alvo * PULSOS_POR_CM);
@@ -399,7 +406,9 @@ static void task_controle(void *arg) {
                     if (uart_move_estado == 0) aplicarPWM(-VEL_GIRO, VEL_GIRO);
                     else                       aplicarPWM(VEL_GIRO, -VEL_GIRO);
                     float dyaw = fabsf(g_yaw - mv_yaw_ini);
-                    bool por_gyro = g_yaw_ok && (dyaw >= uart_move_alvo);
+                    float alvo_g = uart_move_alvo - GIRO_OFFSET_GRAUS;
+                    if (alvo_g < 0.0f) alvo_g = 0.0f;
+                    bool por_gyro = g_yaw_ok && (dyaw >= alvo_g);
                     bool fallback = mv_pulsos >= uart_move_alvo * PULSOS_POR_GRAU * 3.0f;
                     concluiu = por_gyro || fallback;
                 }
@@ -427,13 +436,16 @@ static void task_controle(void *arg) {
                   : 'S';
 
         if (modo != modo_ant) {
-            rumo = 0.0f; integ = 0.0f; rota_fase = 0; rota_pulsos = 0.0f;
+            integ = 0.0f; rota_fase = 0; rota_pulsos = 0.0f;
+            reta_yaw_alvo = g_yaw; rota_reta_yaw = g_yaw;
             modo_ant = modo;
         }
 
         if (modo == 'F' || modo == 'B') {
             int magL, magR;
-            controle_reta(dL, dR, &rumo, &integ, &magL, &magR);
+            float err = (modo == 'F') ? (g_yaw - reta_yaw_alvo)
+                                      : -(g_yaw - reta_yaw_alvo);
+            controle_reta(err, &integ, &magL, &magR);
             if (modo == 'F') aplicarPWM(magL, magR);
             else             aplicarPWM(-magL, -magR);
         } else if (modo == 'T') {
@@ -443,23 +455,24 @@ static void task_controle(void *arg) {
             rota_pulsos += (dL + dR) / 2.0f;
             if (rota_fase == 0) {
                 int magL, magR;
-                controle_reta(dL, dR, &rumo, &integ, &magL, &magR);
+                controle_reta(g_yaw - rota_reta_yaw, &integ, &magL, &magR);
                 aplicarPWM(magL, magR);
                 if (rota_pulsos >= ROTA_PULSOS_RETA) {
                     rota_fase = 1;
                     rota_pulsos = 0.0f;
-                    rumo = 0.0f; integ = 0.0f;
+                    integ = 0.0f;
                     rota_yaw_ini = g_yaw;
                 }
             } else {
                 aplicarPWM(-VEL_GIRO, VEL_GIRO);
                 float dyaw = fabsf(g_yaw - rota_yaw_ini);
-                bool por_gyro = g_yaw_ok && (dyaw >= ROTA_GRAUS_GIRO);
+                bool por_gyro = g_yaw_ok && (dyaw >= ROTA_GRAUS_GIRO - GIRO_OFFSET_GRAUS);
                 bool fallback = rota_pulsos >= ROTA_GRAUS_GIRO * PULSOS_POR_GRAU * 3.0f;
                 if (por_gyro || fallback) {
                     rota_fase = 0;
                     rota_pulsos = 0.0f;
-                    rumo = 0.0f; integ = 0.0f;
+                    integ = 0.0f;
+                    rota_reta_yaw = g_yaw;
                 }
             }
         } else {
