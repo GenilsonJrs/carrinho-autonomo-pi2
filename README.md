@@ -8,6 +8,9 @@ embarcado (ESP32-S3) e na interface de controle.
 > Repositório individual de estudo/versionamento. Não substitui o repositório oficial
 > do grupo; serve para eu organizar e evoluir a minha parte do código.
 
+📌 **Pinagem completa e esquemático de ligações** (todas as ESPs, sensores e drivers):
+veja [HARDWARE.md](HARDWARE.md).
+
 ## O que é o projeto
 
 Robô móvel que navega de forma autônoma para transportar carga entre pontos demarcados.
@@ -19,10 +22,10 @@ drivers BTS7960, sensores infravermelhos e encoders. A arquitetura prevê duas E
 
 ```
 .
-├── esp_slave/        Firmware da ESP32-S3 escrava (motores + sensores + encoders + controle)
-├── esp_master/       Firmware da ESP32-S3 mestre (a implementar)
-├── web/              Interface de controle via Web Bluetooth (controle_ble.html)
-└── docs/             Esquemático de ligações dos pinos (ligacoes.md)
+├── esp_slave/        Firmware da ESP32-S3 escrava (motores + sensores + encoders + giroscópio + controle)
+├── esp_master/       Firmware da ESP32-S3 mestre (Wi-Fi SoftAP + servidor web + UART)
+├── web/              Interface de controle (página web + Web Bluetooth)
+└── HARDWARE.md       Pinagem completa e esquemático de ligações (todas as ESPs e sensores)
 ```
 
 ## esp_slave — estado atual
