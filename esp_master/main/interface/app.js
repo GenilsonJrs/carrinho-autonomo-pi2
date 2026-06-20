@@ -849,3 +849,30 @@ window.addEventListener('load', () => {
   setupCanvasInteractivity();
   iniciarTelemetriaMock();
 });
+
+// --- Controle por teclado (WASD ou setas) ---
+const _teclaDir = {
+  'w': 'frente', 'arrowup': 'frente',
+  's': 're', 'arrowdown': 're',
+  'a': 'esquerda', 'arrowleft': 'esquerda',
+  'd': 'direita', 'arrowright': 'direita'
+};
+
+document.addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
+  if (k in _teclaDir) {
+    e.preventDefault();
+    if (!e.repeat) comandoManual(_teclaDir[k]);
+  } else if (k === ' ') {
+    e.preventDefault();
+    comandoManual('parar');
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  const k = e.key.toLowerCase();
+  if (k in _teclaDir) {
+    e.preventDefault();
+    comandoManual('parar');
+  }
+});
