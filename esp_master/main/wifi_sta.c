@@ -28,10 +28,11 @@ static void handler(void *arg, esp_event_base_t base, int32_t id, void *data) {
         s_retry = 0;
         xEventGroupSetBits(s_group, WIFI_CONNECTED_BIT);
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+        wifi_event_sta_disconnected_t *d = (wifi_event_sta_disconnected_t *)data;
         if (s_retry < WIFI_MAX_RETRY) {
             esp_wifi_connect();
             s_retry++;
-            ESP_LOGW(TAG, "Reconectando (%d/%d)", s_retry, WIFI_MAX_RETRY);
+            ESP_LOGW(TAG, "Reconectando (%d/%d) reason=%d", s_retry, WIFI_MAX_RETRY, d->reason);
         } else {
             xEventGroupSetBits(s_group, WIFI_FAIL_BIT);
         }
@@ -58,7 +59,7 @@ bool wifi_sta_init(const char *ssid, const char *password) {
     wifi_config_t wc = { 0 };
     strncpy((char *)wc.sta.ssid, ssid, sizeof(wc.sta.ssid) - 1);
     strncpy((char *)wc.sta.password, password, sizeof(wc.sta.password) - 1);
-    wc.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    wc.sta.threshold.authmode = WIFI_AUTH_OPEN;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wc));
