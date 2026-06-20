@@ -8,6 +8,8 @@
 #include "driver/ledc.h"
 #include "driver/pulse_cnt.h"
 #include "driver/uart.h"
+#include "driver/i2c_master.h"
+#include <math.h>
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
@@ -39,6 +41,7 @@ static const char *TAG = "BB8";
 
 #define ROTA_PULSOS_RETA  7400
 #define ROTA_PULSOS_GIRO  435
+#define ROTA_GRAUS_GIRO   45.0f
 #define PULSOS_POR_CM     (ROTA_PULSOS_RETA / 100.0f)
 #define PULSOS_POR_GRAU   (ROTA_PULSOS_GIRO / 45.0f)
 
@@ -69,6 +72,12 @@ static const char *TAG = "BB8";
 #define MAN_ESQ    0xFFF2
 #define MAN_DIR    0xFFF3
 
+#define I2C_SDA          11
+#define I2C_SCL          12
+#define MPU_ADDR         0x68
+#define GYRO_LSB_POR_DPS 131.0f
+#define GYRO_DEADZONE    0.5f
+
 static pcnt_unit_handle_t pcnt_esq = NULL;
 static pcnt_unit_handle_t pcnt_dir = NULL;
 static volatile bool g_queda = false;
@@ -77,6 +86,10 @@ static volatile char g_cmd   = 'S';
 static volatile bool  uart_move_active = false;
 static volatile int   uart_move_estado = 3;
 static volatile float uart_move_alvo   = 0.0f;
+
+static i2c_master_dev_handle_t g_mpu = NULL;
+static volatile float g_yaw    = 0.0f;
+static volatile bool  g_yaw_ok = false;
 
 static uint8_t own_addr_type;
 static void start_advertising(void);
@@ -195,6 +208,61 @@ static void init_encoders(void) {
     ESP_LOGI(TAG, "Encoders %s", (pcnt_esq && pcnt_dir) ? "OK" : "FALHA");
 }
 
+static esp_err_t mpu_w(uint8_t reg, uint8_t val) {
+    uint8_t b[2] = { reg, val };
+    return i2c_master_transmit(g_mpu, b, 2, 1000);
+}
+
+static esp_err_t mpu_r(uint8_t reg, uint8_t *d, size_t n) {
+    return i2c_master_transmit_receive(g_mpu, &reg, 1, d, n, 1000);
+}
+
+static int16_t le_gyro_z(void) {
+    uint8_t d[2] = { 0, 0 };
+    mpu_r(0x47, d, 2);
+    return (int16_t)((d[0] << 8) | d[1]);
+}
+
+static void init_giroscopio(void) {
+    i2c_master_bus_config_t bcfg = {
+        .i2c_port = I2C_NUM_0,
+        .sda_io_num = I2C_SDA,
+        .scl_io_num = I2C_SCL,
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    i2c_master_bus_handle_t bus;
+    if (i2c_new_master_bus(&bcfg, &bus) != ESP_OK) { ESP_LOGE(TAG, "I2C bus falhou"); return; }
+    i2c_device_config_t dcfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = MPU_ADDR,
+        .scl_speed_hz = 400000,
+    };
+    if (i2c_master_bus_add_device(bus, &dcfg, &g_mpu) != ESP_OK) { ESP_LOGE(TAG, "MPU add falhou"); g_mpu = NULL; return; }
+    mpu_w(0x6B, 0x00);
+    ESP_LOGI(TAG, "MPU-6050 OK (I2C SDA%d/SCL%d)", I2C_SDA, I2C_SCL);
+}
+
+static void task_giroscopio(void *arg) {
+    if (!g_mpu) { ESP_LOGE(TAG, "Sem MPU; yaw desativado (giros caem no fallback por pulso)"); vTaskDelete(NULL); return; }
+    vTaskDelay(pdMS_TO_TICKS(200));
+    long soma = 0;
+    const int N = 200;
+    for (int i = 0; i < N; i++) { soma += le_gyro_z(); vTaskDelay(pdMS_TO_TICKS(10)); }
+    float bias = (float)soma / N;
+    g_yaw_ok = true;
+    ESP_LOGI(TAG, "Gyro bias=%.1f, yaw ativo", bias);
+    const float dt = 0.02f;
+    TickType_t last = xTaskGetTickCount();
+    for (;;) {
+        float rate = (le_gyro_z() - bias) / GYRO_LSB_POR_DPS;
+        if (rate > -GYRO_DEADZONE && rate < GYRO_DEADZONE) rate = 0.0f;
+        g_yaw += rate * dt;
+        vTaskDelayUntil(&last, pdMS_TO_TICKS(20));
+    }
+}
+
 static void controle_reta(int dL, int dR, float *rumo, float *integ, int *magL, int *magR) {
     *rumo  += (float)(dL - dR);
     *integ += *rumo;
@@ -260,13 +328,11 @@ static void task_uart_link(void *arg) {
                 else if (!uart_move_active && !g_queda) {
                     int estado = (val >> 14) & 0x03;
                     int valor  = val & 0x3FFF;
-                    float alvo = (estado == 3 || estado == 2) ? (valor * PULSOS_POR_CM)
-                                                              : (valor * PULSOS_POR_GRAU);
                     uart_move_estado = estado;
-                    uart_move_alvo   = alvo;
+                    uart_move_alvo   = (float)valor;
                     uart_move_active = true;
                     uart_send_pkt(SIG_ACK);
-                    ESP_LOGI(TAG, "UART CMD estado=%d valor=%d -> alvo=%.0f pulsos", estado, valor, alvo);
+                    ESP_LOGI(TAG, "UART CMD estado=%d valor=%d", estado, valor);
                 }
                 idx = 0;
             } else {
@@ -289,6 +355,8 @@ static void task_controle(void *arg) {
     bool  mv_prev = false;
     float mv_pulsos = 0.0f;
     float mv_rumo = 0.0f, mv_integ = 0.0f;
+    float mv_yaw_ini = 0.0f;
+    float rota_yaw_ini = 0.0f;
 
     for (;;) {
         int dL = 0, dR = 0;
@@ -300,6 +368,7 @@ static void task_controle(void *arg) {
         if (uart_move_active) {
             if (!mv_prev) {
                 mv_pulsos = 0.0f; mv_rumo = 0.0f; mv_integ = 0.0f;
+                mv_yaw_ini = g_yaw;
                 mv_prev = true;
             }
 
@@ -311,17 +380,22 @@ static void task_controle(void *arg) {
                 ESP_LOGW(TAG, "UART move abortado (queda) -> ABORT");
             } else {
                 mv_pulsos += (dL + dR) / 2.0f;
+                bool concluiu = false;
                 if (uart_move_estado == 3 || uart_move_estado == 2) {
                     int magL, magR;
                     controle_reta(dL, dR, &mv_rumo, &mv_integ, &magL, &magR);
                     if (uart_move_estado == 3) aplicarPWM(magL, magR);
                     else                       aplicarPWM(-magL, -magR);
-                } else if (uart_move_estado == 0) {
-                    aplicarPWM(-VEL_GIRO, VEL_GIRO);
+                    concluiu = (mv_pulsos >= uart_move_alvo * PULSOS_POR_CM);
                 } else {
-                    aplicarPWM(VEL_GIRO, -VEL_GIRO);
+                    if (uart_move_estado == 0) aplicarPWM(-VEL_GIRO, VEL_GIRO);
+                    else                       aplicarPWM(VEL_GIRO, -VEL_GIRO);
+                    float dyaw = fabsf(g_yaw - mv_yaw_ini);
+                    bool por_gyro = g_yaw_ok && (dyaw >= uart_move_alvo);
+                    bool fallback = mv_pulsos >= uart_move_alvo * PULSOS_POR_GRAU * 3.0f;
+                    concluiu = por_gyro || fallback;
                 }
-                if (mv_pulsos >= uart_move_alvo) {
+                if (concluiu) {
                     motores_stop();
                     uart_move_active = false;
                     mv_prev = false;
@@ -366,10 +440,14 @@ static void task_controle(void *arg) {
                     rota_fase = 1;
                     rota_pulsos = 0.0f;
                     rumo = 0.0f; integ = 0.0f;
+                    rota_yaw_ini = g_yaw;
                 }
             } else {
                 aplicarPWM(-VEL_GIRO, VEL_GIRO);
-                if (rota_pulsos >= ROTA_PULSOS_GIRO) {
+                float dyaw = fabsf(g_yaw - rota_yaw_ini);
+                bool por_gyro = g_yaw_ok && (dyaw >= ROTA_GRAUS_GIRO);
+                bool fallback = rota_pulsos >= ROTA_PULSOS_GIRO * 3.0f;
+                if (por_gyro || fallback) {
                     rota_fase = 0;
                     rota_pulsos = 0.0f;
                     rumo = 0.0f; integ = 0.0f;
@@ -381,7 +459,7 @@ static void task_controle(void *arg) {
 
         if (++tick >= (500 / CTRL_MS)) {
             tick = 0;
-            ESP_LOGI(TAG, "dL=%d dR=%d totE=%ld totD=%ld modo=%c", dL, dR, total_esq, total_dir, modo);
+            ESP_LOGI(TAG, "dL=%d dR=%d totE=%ld totD=%ld yaw=%.1f modo=%c", dL, dR, total_esq, total_dir, g_yaw, modo);
         }
         vTaskDelay(pdMS_TO_TICKS(CTRL_MS));
     }
@@ -480,8 +558,10 @@ void app_main(void) {
     init_sensores();
     init_encoders();
     uart_link_init();
+    init_giroscopio();
     xTaskCreate(task_sensor_queda, "sensor_queda", 3072, NULL, 6, NULL);
     xTaskCreate(task_uart_link,    "uart_link",    4096, NULL, 7, NULL);
+    xTaskCreate(task_giroscopio,   "giroscopio",   3072, NULL, 4, NULL);
     xTaskCreate(task_controle,     "controle",     4096, NULL, 5, NULL);
 
     ret = nimble_port_init();
