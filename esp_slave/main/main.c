@@ -148,6 +148,14 @@ static void init_motores(void) {
 }
 
 static void handle_command(char cmd) {
+    if ((cmd == '1' || cmd == '9' || cmd == '8') && !uart_move_active && !g_queda) {
+        if (cmd == '1') { uart_move_estado = 3; uart_move_alvo = 100.0f; }
+        else if (cmd == '9') { uart_move_estado = 0; uart_move_alvo = 90.0f; }
+        else { uart_move_estado = 1; uart_move_alvo = 90.0f; }
+        uart_move_active = true;
+        ESP_LOGI(TAG, "TESTE calib: estado=%d alvo=%.0f", uart_move_estado, uart_move_alvo);
+        return;
+    }
     g_cmd = cmd;
     ESP_LOGI(TAG, "BLE CMD %c", cmd);
 }
@@ -400,7 +408,8 @@ static void task_controle(void *arg) {
                     uart_move_active = false;
                     mv_prev = false;
                     uart_send_pkt(SIG_DONE);
-                    ESP_LOGI(TAG, "UART move concluido -> DONE");
+                    ESP_LOGI(TAG, "move concluido: dyaw=%.1f pulsos=%.0f -> DONE",
+                             fabsf(g_yaw - mv_yaw_ini), mv_pulsos);
                 }
             }
             vTaskDelay(pdMS_TO_TICKS(CTRL_MS));
