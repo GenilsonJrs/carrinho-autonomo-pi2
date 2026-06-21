@@ -4,6 +4,8 @@
 const MAX_PATHS = 8;
 const MAX_ACOES = 16; // 4 bits = 0-15
 const MAX_VALOR = 63; // 6 bits = 0-63
+const GIRO_ESCALA = 1;   // graus por passo do giro (resolucao de 1 grau)
+const GIRO_MAX = 360;    // limite do giro em graus
 
 const estado = {
   operacao:     0,          // 0 = append, 1 = restart
@@ -17,7 +19,7 @@ const estado = {
 
 function calcularValorReal(tipo, valor) {
   if (tipo === 'mover') return `${(valor * 0.5).toFixed(1)} m`;
-  if (tipo === 'girar') return `${valor * 6}°`;
+  if (tipo === 'girar') return `${valor * GIRO_ESCALA}°`;
   return valor;
 }
 
@@ -88,7 +90,7 @@ function adicionarAcaoRapida(tipo) {
   const acao = {
     id:      estado.uid++,
     tipo:    tipo,
-    valor:   1, // valor padrão
+    valor:   tipo === 'girar' ? 90 : 1, // padrão: giro 90°, movimento 0,5 m
     direcao: direcaoPadrao(tipo)
   };
   
@@ -158,10 +160,10 @@ function _htmlAcao(pathId, acao, indice) {
   const corAcao = acao.tipo === 'mover' ? '#3b82f6' : '#8b5cf6';
   const label = acao.tipo === 'girar' ? 'Giro' : 'Movimento';
 
-  const valorNatural = acao.tipo === 'mover' ? (acao.valor * 0.5) : (acao.valor * 6);
+  const valorNatural = acao.tipo === 'mover' ? (acao.valor * 0.5) : (acao.valor * GIRO_ESCALA);
   const unidade      = acao.tipo === 'mover' ? 'm' : '°';
-  const stepNatural  = acao.tipo === 'mover' ? 0.5 : 6;
-  const maxNatural   = acao.tipo === 'mover' ? (MAX_VALOR * 0.5) : (MAX_VALOR * 6);
+  const stepNatural  = acao.tipo === 'mover' ? 0.5 : GIRO_ESCALA;
+  const maxNatural   = acao.tipo === 'mover' ? (MAX_VALOR * 0.5) : GIRO_MAX;
 
   const opcoes = opcoesDirecao(acao.tipo);
   const htmlDirecao = `
@@ -207,8 +209,9 @@ function atualizarValorAcao(pathId, acaoId, valorNatural, tipo) {
   if (acao) {
     const passos = tipo === 'mover'
       ? Math.round(Number.parseFloat(valorNatural) / 0.5)
-      : Math.round(Number.parseFloat(valorNatural) / 6);
-    acao.valor = Math.max(0, Math.min(MAX_VALOR, passos || 0));
+      : Math.round(Number.parseFloat(valorNatural) / GIRO_ESCALA);
+    const maxPassos = tipo === 'mover' ? MAX_VALOR : GIRO_MAX;
+    acao.valor = Math.max(0, Math.min(maxPassos, passos || 0));
     atualizarVisualizacao();
     desenharRota();
     // sem renderizar() — evita recriar o input e perder o foco
@@ -315,7 +318,7 @@ async function enviarRota() {
   }
   const rota = [];
   estado.paths.forEach(p => p.acoes.forEach(a => {
-    const valor = a.tipo === 'mover' ? Math.round(a.valor * 50) : (a.valor * 6);
+    const valor = a.tipo === 'mover' ? Math.round(a.valor * 50) : (a.valor * GIRO_ESCALA);
     rota.push({ tipo: a.tipo, valor, direcao: a.direcao });
   }));
   const payload = { operacao: estado.operacao === 1 ? 'restart' : 'append', rota };
@@ -539,7 +542,7 @@ function desenharRota() {
         y += Math.sin(angulo) * distPixels * dir;
         ctx.lineTo(x, y);
       } else if (acao.tipo === 'girar') {
-        const giro = (acao.valor * 6) * (Math.PI / 180);
+        const giro = (acao.valor * GIRO_ESCALA) * (Math.PI / 180);
         angulo += (acao.direcao === 'anticlockwise' ? -giro : giro);
       }
     });
@@ -647,9 +650,9 @@ function _calcularSegmentos() {
         x = endX;
         y = endY;
       } else if (acao.tipo === 'girar') {
-        const delta = (acao.valor * 6) * (Math.PI / 180) * (acao.direcao === 'anticlockwise' ? -1 : 1);
+        const delta = (acao.valor * GIRO_ESCALA) * (Math.PI / 180) * (acao.direcao === 'anticlockwise' ? -1 : 1);
         segs.push({ tipo: 'girar', x, y, startAngulo: angulo, endAngulo: angulo + delta,
-          label: `Giro ${acao.valor * 6}° ${acao.direcao === 'anticlockwise' ? 'anti-horário' : 'horário'}` });
+          label: `Giro ${acao.valor * GIRO_ESCALA}° ${acao.direcao === 'anticlockwise' ? 'anti-horário' : 'horário'}` });
         angulo += delta;
       }
     });
