@@ -1,5 +1,16 @@
 # Carrinho Autônomo — PI2
 
+<p align="center">
+  <img src="assets/carrinho-completo.jpg" alt="Carrinho autônomo de transporte de carga" width="70%">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/ESP32--S3-000?logo=espressif&logoColor=E7352C" alt="ESP32-S3">
+  <img src="https://img.shields.io/badge/ESP--IDF-v5.5-E7352C?logo=espressif&logoColor=white" alt="ESP-IDF">
+  <img src="https://img.shields.io/badge/FreeRTOS-1FA200?logo=freertos&logoColor=white" alt="FreeRTOS">
+  <img src="https://img.shields.io/badge/Linguagem-C-00599C?logo=c&logoColor=white" alt="C">
+</p>
+
 Versionamento **pessoal** do meu trabalho no projeto de um **carrinho autônomo de
 transporte de carga**, desenvolvido na disciplina **Projeto Integrador 2 (PI2)** da
 UnB Gama. Este repositório é o meu acompanhamento do desenvolvimento — foco no firmware
@@ -17,6 +28,19 @@ Robô móvel que navega de forma autônoma para transportar carga entre pontos d
 A eletrônica é baseada em **ESP32-S3**, com dois motores DC (N20) em tração diferencial,
 drivers BTS7960, sensores infravermelhos e encoders. A arquitetura prevê duas ESP32-S3
 ("mestre" e "escravo") se comunicando por UART.
+
+## Galeria
+
+| Estrutura montada | Chassi e eletrônica |
+|:---:|:---:|
+| <img src="assets/carrinho-montado.jpg" alt="Carrinho montado" width="100%"> | <img src="assets/chassi-eletronica.jpg" alt="Chassi e eletrônica embarcada" width="100%"> |
+| Carroceria de carga sobre o chassi de perfil de alumínio. | Motores N20, rodas e a eletrônica embarcada sob a plataforma. |
+
+<p align="center">
+  <img src="assets/equipe.jpg" alt="Equipe do grupo 8 - PI2 / UnB Gama" width="70%">
+  <br>
+  <sub>Equipe do projeto (Grupo 8 — PI2 / FGA-UnB).</sub>
+</p>
 
 ## Estrutura do repositório
 
