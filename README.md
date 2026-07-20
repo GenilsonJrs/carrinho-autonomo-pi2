@@ -22,7 +22,7 @@ da UnB/FGA. Este repositório é o meu acompanhamento do desenvolvimento, com fo
 > Repositório individual de estudo/versionamento. Não substitui o repositório oficial
 > do grupo; serve para eu organizar e evoluir a minha parte do código.
 
-📌 **Pinagem completa e esquemático de ligações** (todas as ESPs, sensores e drivers):
+**Pinagem completa e esquemático de ligações** (todas as ESPs, sensores e drivers):
 veja [HARDWARE.md](HARDWARE.md).
 
 ## O que é o projeto
@@ -34,14 +34,14 @@ com dois motores DC (encoder Hall) em tração diferencial, drivers **BTS7960**,
 detecção de queda. O operador monta a rota em uma **interface web** embarcada; o mestre
 enfileira os comandos e os despacha ao escravo, que executa cada movimento em malha fechada.
 
-## 🎬 Demonstração em vídeo
+## Demonstração em vídeo
 
 | Operação completa (navegação autônoma) | Apresentação final — chegada ao ponto de entrega |
 |:---:|:---:|
 | [![Operação completa](https://img.youtube.com/vi/V_NZtubakYI/hqdefault.jpg)](https://youtu.be/V_NZtubakYI) | [![Apresentação final](https://img.youtube.com/vi/hiYJ1DdmhFE/hqdefault.jpg)](https://youtu.be/hiYJ1DdmhFE) |
 | Robô cumprindo a missão completa de navegação com a carga. | Chegada autônoma ao ponto de entrega na apresentação. |
 
-▶️ Bônus — [Compilação do firmware no ESP-IDF](https://youtu.be/i_dLAfPBTEo).
+Bônus — [Compilação do firmware no ESP-IDF](https://youtu.be/i_dLAfPBTEo).
 
 ## Galeria
 
