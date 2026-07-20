@@ -1,0 +1,54 @@
+{
+  "operacao": "append",
+  "agendamento": "immediate",
+  "total_acoes": 6,
+  "rota": [
+    {
+      "trecho": "Trecho 1",
+      "acoes": [
+        {
+          "tipo": "mover",
+          "valor": 1,
+          "unidade": "metros",
+          "valor_real": "0.5 m",
+          "direcao": "forward"
+        },
+        {
+          "tipo": "mover",
+          "valor": 18,
+          "unidade": "metros",
+          "valor_real": "9.0 m",
+          "direcao": "forward"
+        },
+        {
+          "tipo": "girar",
+          "valor": 90,
+          "unidade": "graus",
+          "valor_real": "90°",
+          "direcao": "clockwise"
+        },
+        {
+          "tipo": "mover",
+          "valor": 5,
+          "unidade": "metros",
+          "valor_real": "2.5 m",
+          "direcao": "forward"
+        },
+        {
+          "tipo": "girar",
+          "valor": 90,
+          "unidade": "graus",
+          "valor_real": "90°",
+          "direcao": "anticlockwise"
+        },
+        {
+          "tipo": "mover",
+          "valor": 8,
+          "unidade": "metros",
+          "valor_real": "4.0 m",
+          "direcao": "forward"
+        }
+      ]
+    }
+  ]
+}
