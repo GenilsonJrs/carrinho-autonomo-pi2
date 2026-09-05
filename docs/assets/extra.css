@@ -78,3 +78,53 @@
   background-color: var(--md-primary-fg-color);
   color: #FFFFFF;
 }
+
+.person-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.person-card {
+  border: 2px solid var(--md-accent-fg-color);
+  border-radius: 16px;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  width: 220px;
+  background: var(--md-default-bg-color);
+}
+
+.person-card img {
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 0.75rem;
+}
+
+.person-initials {
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  margin: 0 auto 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--md-primary-fg-color);
+  color: #FFFFFF;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.person-card .person-name {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
+.person-card .person-role {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  display: block;
+}
