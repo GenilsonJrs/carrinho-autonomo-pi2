@@ -1,7 +1,7 @@
 # Carrinho Autônomo — PI2 · *Wall-Eight*
 
 <p align="center">
-  <img src="assets/carrinho-completo.jpg" alt="Carrinho autônomo de transporte de carga" width="70%">
+  <img src="docs/assets/carrinho-completo.jpg" alt="Carrinho autônomo de transporte de carga" width="70%">
 </p>
 
 <p align="center">
@@ -22,8 +22,10 @@ da UnB/FGA. Este repositório é o meu acompanhamento do desenvolvimento, com fo
 > Repositório individual de estudo/versionamento. Não substitui o repositório oficial
 > do grupo; serve para eu organizar e evoluir a minha parte do código.
 
+**[Documentação do projeto](https://genilsonjrs.github.io/carrinho-autonomo-pi2/)** — arquitetura, firmware das duas placas, pinagem e interface em formato navegável.
+
 **Pinagem completa e esquemático de ligações** (todas as ESPs, sensores e drivers):
-veja [HARDWARE.md](HARDWARE.md).
+veja [docs/hardware.md](docs/hardware.md).
 
 ## O que é o projeto
 
@@ -47,11 +49,11 @@ Bônus — [Compilação do firmware no ESP-IDF](https://youtu.be/i_dLAfPBTEo).
 
 | Estrutura montada | Chassi e eletrônica |
 |:---:|:---:|
-| <img src="assets/carrinho-montado.jpg" alt="Carrinho montado" width="100%"> | <img src="assets/chassi-eletronica.jpg" alt="Chassi e eletrônica embarcada" width="100%"> |
+| <img src="docs/assets/carrinho-montado.jpg" alt="Carrinho montado" width="100%"> | <img src="docs/assets/chassi-eletronica.jpg" alt="Chassi e eletrônica embarcada" width="100%"> |
 | Carroceria de carga sobre o chassi de perfil de alumínio. | Motores, rodas e a eletrônica embarcada sob a plataforma. |
 
 <p align="center">
-  <img src="assets/equipe.jpg" alt="Equipe do grupo 8 - PI2 / UnB Gama" width="70%">
+  <img src="docs/assets/equipe.jpg" alt="Equipe do grupo 8 - PI2 / UnB Gama" width="70%">
   <br>
   <sub>Equipe do projeto (Grupo 8 — PI2 / FGA-UnB).</sub>
 </p>
@@ -88,7 +90,7 @@ Bônus — [Compilação do firmware no ESP-IDF](https://youtu.be/i_dLAfPBTEo).
 ├── esp_master/       Firmware da ESP32-S3 mestre (Wi-Fi + servidor web + fila/FSM + UART)
 ├── web/              Interface de controle standalone (Web Bluetooth)
 ├── rotas/            Rotas de navegação usadas na apresentação final (JSON importável na interface)
-└── HARDWARE.md       Pinagem completa e esquemático de ligações (todas as ESPs e sensores)
+└── docs/             Documentação, pinagem, esquemático de ligações e imagens
 ```
 
 ## esp_slave — firmware da escrava
