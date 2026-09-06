@@ -17,6 +17,3 @@ dependencies.lock
 *.tmp
 Thumbs.db
 .DS_Store
-
-# MkDocs
-site/
